@@ -1,0 +1,40 @@
+{
+  "configVersion": 1,
+
+  "_comment": "通用配置字典。改这个文件即生效，不用重启服务、不用发客户端版本。顶层必须是对象；值可以是任意 JSON 值。客户端必须忽略不认识的 key。configVersion 是元信息，改内容时记得把它 +1，客户端据此判断要不要刷新本地缓存。",
+
+  "pollIntervalSeconds": 15,
+  "staleAfterMinutes": 30,
+
+  "features": {
+    "showGuide": true,
+    "guideVersion": 1,
+    "enableConverter": true,
+    "enableMetalDetail": true
+  },
+
+  "units": {
+    "default": "base",
+    "allowed": ["base", "oz", "g", "kg", "lb", "t"]
+  },
+
+  "currencies": {
+    "default": "CNY",
+    "allowed": ["CNY", "CNH", "USD", "EUR", "JPY", "HKD", "GBP", "KRW", "TWD"]
+  },
+
+  "notice": {
+    "title": "行情数据说明",
+    "content": "本应用行情来自第三方数据源，可能存在延迟，仅供参考，不构成投资建议。",
+    "showUntil": ""
+  },
+
+  "banner": {
+    "text": "",
+    "url": ""
+  },
+
+  "experimental": {
+    "remoteFieldsEnabled": true
+  }
+}

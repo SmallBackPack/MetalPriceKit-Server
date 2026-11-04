@@ -1,0 +1,13 @@
+{
+  "_comment": "品种字典 = 契约 §2.1 的数据源 + 上游符号映射表。切换上游供应商时只改 upstreamSymbol/baseUnit 两处，不动业务逻辑。",
+  "metals": [
+    { "code": "XAU", "name": "黄金", "baseUnit": "oz", "scale": 2, "category": "precious",   "order": 1, "upstreamSymbol": "gold" },
+    { "code": "XAG", "name": "白银", "baseUnit": "oz", "scale": 3, "category": "precious",   "order": 2, "upstreamSymbol": "silver" },
+    { "code": "XPT", "name": "铂金", "baseUnit": "oz", "scale": 2, "category": "precious",   "order": 3, "upstreamSymbol": "platinum" },
+    { "code": "XPD", "name": "钯金", "baseUnit": "oz", "scale": 3, "category": "precious",   "order": 4, "upstreamSymbol": "palladium" },
+    { "code": "HG",  "name": "铜",   "baseUnit": "t",  "scale": 2, "category": "industrial", "order": 5, "upstreamSymbol": "copper" },
+    { "code": "NI",  "name": "镍",   "baseUnit": "t",  "scale": 2, "category": "industrial", "order": 6, "upstreamSymbol": "nickel" },
+    { "code": "ALI", "name": "铝",   "baseUnit": "t",  "scale": 2, "category": "industrial", "order": 7, "upstreamSymbol": "aluminum" },
+    { "code": "ZNC", "name": "锌",   "baseUnit": "t",  "scale": 2, "category": "industrial", "order": 8, "upstreamSymbol": "zinc" }
+  ]
+}

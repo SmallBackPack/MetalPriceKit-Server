@@ -1,0 +1,16 @@
+{
+  "_comment": "逻辑接口名 → 对外暴露路径的映射表。路径本身是随机无意义串，不泄漏接口用途。轮换时改这里即可，客户端同步更新。bootstrap 必须是明文（客户端还没有密钥，无法解密），其余业务接口一律加密。",
+  "routes": {
+    "bootstrap": "/v1/mpk-bootstrap",
+    "quotes": "/v1/gpwwvvew-deevda",
+    "metals": "/v1/mkkzprqp-vvndte",
+    "fx": "/v1/tqzxvnrk-lzbor",
+    "config": "/v1/wqbdtoe-ocfvy",
+    "fields": "/v1/rtkbmvxw-pflqs",
+    "auth": "/v1/nrmlkzvc-xdpwo",
+    "profile": "/v1/bhyftvzu-qmocn",
+    "feedback": "/v1/oxrjqmie-vlwnk",
+    "crash": "/v1/zeqmflkd-tvrnh",
+    "events": "/v1/dfvbzckl-yrgmo"
+  }
+}
