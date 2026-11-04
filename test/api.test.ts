@@ -415,3 +415,22 @@ test("畸形客户端公钥不会把服务打成 500", async () => {
 test("采集确实打到了上游一次（只用了 1 次额度）", () => {
   assert.equal(fake.calls.filter((c) => c === "/v1/latest").length, 1);
 });
+
+test("限流按真实客户端 IP 分桶，不被代理头合并成一桶", async () => {
+  // 服务在 Nginx 后面时，所有请求的 socket 地址都是 127.0.0.1。
+  // 如果没开 trust proxy，全站用户共用一个限流桶 —— 第 61 个请求就会误伤所有人。
+  const hit = async (ip: string): Promise<number> => {
+    const res = await fetch(`${baseUrl}${routes.metals}`, {
+      headers: { "x-mpk-ck": clientPubB64, "x-forwarded-for": ip },
+    });
+    return res.status;
+  };
+
+  // 把 10.0.0.1 这个桶打满
+  let last = 0;
+  for (let i = 0; i < 61; i++) last = await hit("10.0.0.1");
+  assert.equal(last, 429, "同一个 IP 第 61 次应该被限流");
+
+  // 另一个 IP 的桶是独立的，不该被牵连
+  assert.equal(await hit("10.0.0.2"), 200, "另一个 IP 不该被牵连");
+});

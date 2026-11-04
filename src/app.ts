@@ -55,6 +55,14 @@ export function createApp(deps: AppDeps): express.Express {
   app.disable("x-powered-by");
   app.set("etag", false);
 
+  // 信任一层代理。生产环境 Nginx 在前面，不开这个的话 req.ip 永远是 127.0.0.1，
+  // 全站用户会被算成同一个 IP —— 60/min 的限流会误伤所有人。
+  //
+  // 用数字 1 而不是 true：只信任「离服务端最近的那一跳」。
+  // 客户端自己伪造 X-Forwarded-For 时，Nginx 会把自己的 $remote_addr 追加在末尾，
+  // 于是取到的仍然是真实客户端 IP。
+  app.set("trust proxy", 1);
+
   const ipLimiter = new RateLimiter({ windowMs: 60_000, max: 60 });
   const tokenLimiter = new RateLimiter({ windowMs: 60_000, max: 30 });
 
