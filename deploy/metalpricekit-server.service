@@ -1,0 +1,45 @@
+# MetalPriceKit Server —— systemd unit
+#
+# 安装：
+#   sudo cp deploy/metalpricekit-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now metalpricekit-server
+#   sudo journalctl -u metalpricekit-server -f
+#
+# 前提：Node 装在 /usr/local/bin/node，代码在 /opt/metalpricekit-server。
+
+[Unit]
+Description=MetalPriceKit Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mpk
+Group=mpk
+WorkingDirectory=/opt/metalpricekit-server
+
+# 密钥与上游 key 都在这个文件里，权限设成 600。
+EnvironmentFile=/etc/metalpricekit-server.env
+
+ExecStart=/usr/local/bin/node src/index.ts
+Restart=always
+RestartSec=5
+
+# 采集器是自己算好时间才醒的，不要被它钉住。
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=metalpricekit-server
+
+# 服务只需要读代码、写 data 目录。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/metalpricekit-server/data
+
+[Install]
+WantedBy=multi-user.target
