@@ -1,0 +1,22 @@
+# 依赖
+node_modules/
+
+# 运行时数据：SQLite 库、上游用量计数、快照、日志。
+# 这些是「跑出来的」，不是代码，重启会重新生成（但 market.db 里的历史收盘价值得备份，
+# 见 docs/服务端部署与额度.md §六）。
+data/
+
+# 日志
+*.log
+
+# 环境变量与密钥。绝不入库。
+.env
+.env.*
+*.pem
+*.key
+
+# 编辑器与系统
+.DS_Store
+.idea/
+.vscode/
+*.swp

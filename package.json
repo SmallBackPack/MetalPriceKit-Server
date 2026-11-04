@@ -1,0 +1,26 @@
+{
+  "name": "metalpricekit-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MetalPriceKit 行情服务端",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/",
+    "smoke": "node scripts/smoke.ts",
+    "gen:routes": "node scripts/gen-routes.ts"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

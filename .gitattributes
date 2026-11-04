@@ -1,0 +1,3 @@
+# 统一用 LF。
+# 开发机是 Windows，服务器是 Linux —— 两边都用 LF，diff 才不会因为换行符而满屏红。
+* text=auto eol=lf
