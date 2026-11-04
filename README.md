@@ -41,6 +41,7 @@ MetalPriceKit-Server/
 │   ├── routes.json             混淆路径表 —— 逻辑名 → 对外路径
 │   ├── metals.json             品种字典 + 上游符号映射（换供应商只改这里）
 │   ├── currencies.json         货币白名单（上游给 174 个，含废弃币，必须过滤）
+│   ├── holidays.json           金属市场休市日（伦敦本地日期）
 │   └── remote-config.json      通用字段字典 —— 改完即生效，不用重启、不用发版
 ├── src/
 │   ├── index.ts                进程入口
@@ -58,6 +59,11 @@ MetalPriceKit-Server/
 ├── scripts/
 │   ├── smoke.ts                客户端侧参考实现 + 部署自检
 │   └── gen-routes.ts           生成新的混淆路径表
+├── deploy/                     部署产物（可直接复制）
+│   ├── env.example             环境变量模板
+│   ├── metalpricekit-server.service   systemd unit
+│   ├── nginx.conf              Nginx 站点配置
+│   └── backup.sh               SQLite 备份脚本
 ├── test/                       node:test，全部打本地假上游（不烧真额度）
 └── docs/
     ├── 客户端接入指南.md        ← Swift 端照着这份接
@@ -97,6 +103,11 @@ MetalPriceKit-Server/
 | `changeRate` 传原始小数 | `0.0123` = 1.23%，不乘 100、不下发格式化字符串 |
 | 缺数据就是缺 | 不塞 0 兜底。缺一个品种列表就少一条 |
 | 生产环境强制加密 | 没有客户端公钥就返回 400，不降级成明文 —— 否则加密形同虚设 |
+| 交易时段按伦敦本地时间判 | 金属现货的参照时区是 LBMA。用固定 UTC 边界会在夏令时切换时漂移一小时 |
+| 只判「有把握的休市」 | 把开市判成休市会让用户错过行情；反过来只是少个提示，涨跌额沿用已兜住 |
+| 配置单一来源 | `features` / `marketing` / `pollIntervalSeconds` 存在 `remote-config.json` 里，代码里不再存副本 |
+| `pollIntervalSeconds` 与 `upstreamRefreshSeconds` 分开 | 前者是客户端轮询我们的间隔，后者是数据本身多久更新一次。混用一个字段必然被误读 |
+| feedback / events 要 token | 对齐契约 §1.4 —— 反馈要能关联到人。崩溃上报是唯一允许匿名的例外 |
 
 ---
 
@@ -106,7 +117,7 @@ MetalPriceKit-Server/
 npm test
 ```
 
-51 个用例，全部走**本地假上游**（`test/fixture.ts` 内含真实响应样本）。
+55 个用例，全部走**本地假上游**（`test/fixture.ts` 内含真实响应样本）。
 真实额度是真金白银，测试跑几轮就烧光了。
 
 覆盖的关键行为：
@@ -118,8 +129,11 @@ npm test
 - ETag 命中返回 304
 - 同一 `deviceId` 幂等注册
 - 额度用尽后不再向上游发请求
+- 周末 / 节假日判定为休市，夏令时边界跟着伦敦时间走
 - 周末冻结沿用上一交易日涨跌幅
 - 浮点舍入不产生 `131.32499999999982` 这种噪声
+- 没有客户端公钥拿不到明文，畸形公钥不会把服务打成 500
+- feedback / events 缺 token 返回 401
 
 ---
 
