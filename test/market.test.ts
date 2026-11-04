@@ -26,6 +26,7 @@ const config = {
     { code: "HG", name: "铜", baseUnit: "t", scale: 2, category: "industrial", order: 5, upstreamSymbol: "copper" },
   ],
   pollIntervalMs: 600_000,
+  marketHolidays: [] as string[],
 } as unknown as ServerConfig;
 
 const snapshot = {
@@ -62,11 +63,28 @@ test("周末与周日判定为休市", () => {
   assert.equal(inferMarketStatus(new Date("2026-11-08T12:00:00Z")), "closed"); // 周日
 });
 
-test("周一凌晨伦敦盘前判定为休市，其余时间开市", () => {
-  assert.equal(inferMarketStatus(new Date("2026-11-09T03:00:00Z")), "closed"); // 周一 03:00
-  assert.equal(inferMarketStatus(new Date("2026-11-09T06:59:00Z")), "closed"); // 周一 06:59
-  assert.equal(inferMarketStatus(new Date("2026-11-09T07:00:00Z")), "open"); // 周一 07:00
-  assert.equal(inferMarketStatus(new Date("2026-11-04T12:00:00Z")), "open"); // 周三
+test("周五伦敦时间 23:00 收市，周一 00:00 复市", () => {
+  // 2026-11-06 是周五。英国冬令时（GMT+0），伦敦时间 = UTC。
+  assert.equal(inferMarketStatus(new Date("2026-11-06T21:00:00Z")), "open");
+  assert.equal(inferMarketStatus(new Date("2026-11-06T23:30:00Z")), "closed");
+  // 2026-11-09 是周一
+  assert.equal(inferMarketStatus(new Date("2026-11-09T00:00:00Z")), "open");
+});
+
+test("夏令时期间边界跟着伦敦时间走，不会整体漂移一小时", () => {
+  // 2026-07-06 是周一。英国夏令时（GMT+1），伦敦时间 = UTC+1。
+  assert.equal(inferMarketStatus(new Date("2026-07-06T00:00:00Z")), "open"); // 伦敦周一 01:00
+  // 2026-07-10 是周五。伦敦 23:30 = UTC 22:30
+  assert.equal(inferMarketStatus(new Date("2026-07-10T22:30:00Z")), "closed");
+  assert.equal(inferMarketStatus(new Date("2026-07-10T21:30:00Z")), "open"); // 伦敦 22:30
+});
+
+test("节假日判定为休市，非节假日照常开市", () => {
+  const holidays = ["2026-12-25", "2026-01-01"];
+  // 2026-12-25 是周五
+  assert.equal(inferMarketStatus(new Date("2026-12-25T10:00:00Z"), holidays), "closed");
+  // 2026-12-24 是周四
+  assert.equal(inferMarketStatus(new Date("2026-12-24T10:00:00Z"), holidays), "open");
 });
 
 test("休市时不算过期 —— 行情冻结是正常的", () => {

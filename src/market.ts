@@ -66,22 +66,57 @@ export interface FxPayload {
 }
 
 /**
+ * 伦敦时区的当前时间（星期几、小时、日期）。
+ *
+ * 金属现货的参照时区是伦敦（LBMA）。
+ * 用固定的 UTC 边界会在夏令时切换时漂移一小时（伦敦 ↔ UTC 差 0 或 1 小时），
+ * 所以直接取伦敦本地时间，让「周五收市、周一开市」自动对上。
+ */
+function londonNow(now: Date): { dow: number; hour: number; ymd: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? "";
+  const ymd = `${get("year")}-${get("month")}-${get("day")}`;
+  // hour12: false 在部分 ICU 版本里午夜会输出 "24"，归一到 0。
+  const hour = Number.parseInt(get("hour"), 10) % 24;
+  // 从「伦敦本地日期」直接取星期：把它当成 UTC 日期来算，结果就是伦敦那天的星期。
+  const dow = new Date(`${ymd}T00:00:00Z`).getUTCDay();
+  return { dow, hour, ymd };
+}
+
+/**
  * 市场是否处于交易时段。
  *
- * 上游不提供交易状态，按上游适配层文档的初版规则推断：
- *  - 周六 / 周日 → closed
- *  - 周一 00:00–07:00 UTC（伦敦盘前）→ closed
+ * 上游不提供交易状态，按金属现货的实际作息推断：
+ *  - 伦敦时间周六 / 周日 → closed
+ *  - 伦敦时间周五 23:00 起收市 → closed（一直闭到周一 00:00）
+ *  - 命中 config/holidays.json 里的休市日 → closed
  *  - 其余 → open
  *
- * ⚠️ 这套规则没有处理法定节假日，夏令时切换也会让 UTC 边界漂移。
- * 拿到足够真实数据后需要校准；在此之前保持宽松（宁可判 open），
- * 因为把 open 判成 closed 会让客户端显示错误的「休市」提示。
+ * 为什么只判「有把握的休市」：
+ * 把开市判成休市，会让用户以为价格不动、错过真正的行情；
+ * 反过来只是客户端少一个「休市」提示，而涨跌额沿用上一交易日已经兜住了那个坑。
+ * 两害相权，宁可判 open。
+ *
+ * ⚠️ 这套规则是按 LBMA 现货作息推的，没有处理各交易所的差异
+ *    （COMEX 的收盘时间与 LBMA 差几个小时，夏令时也会让边界漂移）。
+ *    拿到足够多的真实周末数据后需要校准。
  */
-export function inferMarketStatus(now: Date = new Date()): MarketStatus {
-  const dow = now.getUTCDay();
-  const hour = now.getUTCHours();
+export function inferMarketStatus(
+  now: Date = new Date(),
+  holidays: readonly string[] = [],
+): MarketStatus {
+  const { dow, hour, ymd } = londonNow(now);
+  if (holidays.includes(ymd)) return "closed";
   if (dow === 0 || dow === 6) return "closed";
-  if (dow === 1 && hour < 7) return "closed";
+  if (dow === 5 && hour >= 23) return "closed";
   return "open";
 }
 
@@ -168,7 +203,7 @@ export function buildQuotesPayload(
   prevChanges: Map<string, { change: number; changeRate: number }>,
   now: Date = new Date(),
 ): QuotesPayload {
-  const marketStatus = inferMarketStatus(now);
+  const marketStatus = inferMarketStatus(now, config.marketHolidays);
   const stalenessThresholdMs = Math.max(30 * 60 * 1000, config.pollIntervalMs * 2);
   const stale = isStale(snapshot.fetchedAt, marketStatus, now, stalenessThresholdMs);
 
