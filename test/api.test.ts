@@ -65,6 +65,7 @@ const config = {
   ],
   routes,
   currencyAllowlist: ["USD", "CNY"],
+  marketHolidays: [] as string[],
   fetchOnBoot: true,
   dataDir: "data",
 } as unknown as ServerConfig;
@@ -237,13 +238,20 @@ test("通用字段接口返回任意 key 的字典", async () => {
   assert.equal(data.configVersion, undefined);
 });
 
-test("结构化配置接口仍然可用", async () => {
+test("结构化配置接口仍然可用，且值来自通用配置文件而不是代码里的副本", async () => {
   const { status, data } = await callEncrypted(routes.config);
 
   assert.equal(status, 200);
   assert.ok(data.configVersion);
   assert.ok(data.features);
   assert.ok(data.runtime.pollIntervalSeconds > 0);
+  // 客户端轮询间隔取自 remote-config.json（15 秒），不是上游刷新间隔
+  assert.equal(data.runtime.pollIntervalSeconds, 15);
+  // 上游刷新间隔另起字段，客户端据此判断数据有多旧
+  assert.equal(data.runtime.upstreamRefreshSeconds, 600);
+  // features / marketing 来自同一份配置文件，值一致
+  assert.equal(data.features.showGuide, true);
+  assert.equal(data.marketing.noticeTitle, "行情数据说明");
 });
 
 test("ETag 命中返回 304 且无 body", async () => {
@@ -328,15 +336,41 @@ test("带 token 可以读写用户资料", async () => {
   assert.equal(patched.data.settings.currency, "USD");
 });
 
-test("反馈接口返回 201 与工单号", async () => {
-  const { status, data } = await callEncrypted(routes.feedback, {
+test("反馈接口需要 token，缺 token 返回 401", async () => {
+  const { status } = await callEncrypted(routes.feedback, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ category: "bug", content: "铜价在凌晨显示为 0" }),
   });
 
+  assert.equal(status, 401);
+});
+
+test("反馈接口返回 201 与工单号", async () => {
+  const auth = await callEncrypted(routes.auth, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceId: "device-feedback-1" }),
+  });
+
+  const { status, data } = await callEncrypted(routes.feedback, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${auth.data.token}` },
+    body: JSON.stringify({ category: "bug", content: "铜价在凌晨显示为 0" }),
+  });
+
   assert.equal(status, 201);
   assert.ok(data.ticketId.startsWith("fb_"));
+});
+
+test("埋点接口需要 token，缺 token 返回 401", async () => {
+  const res = await fetch(`${baseUrl}${routes.events}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-mpk-ck": clientPubB64 },
+    body: JSON.stringify({ sessionId: "s_1", events: [{ name: "price_list_view" }] }),
+  });
+
+  assert.equal(res.status, 401);
 });
 
 test("崩溃上报返回 204", async () => {

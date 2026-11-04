@@ -63,6 +63,8 @@ export interface ServerConfig {
   routes: RouteMap;
   /** 货币白名单：上游给 174 个，含已废弃币种与加密货币，必须过滤。 */
   currencyAllowlist: string[];
+  /** 金属市场休市日（伦敦本地日期，YYYY-MM-DD）。 */
+  marketHolidays: string[];
   /** 启动时是否立刻拉一次上游（不拉则等首个轮询周期）。 */
   fetchOnBoot: boolean;
   dataDir: string;
@@ -150,6 +152,7 @@ export function loadConfig(): ServerConfig {
   const metalsFile = readJsonFile<{ metals: MetalDef[] }>(resolve(ROOT, "config/metals.json"));
   const routesFile = readJsonFile<{ routes: RouteMap }>(resolve(ROOT, "config/routes.json"));
   const currenciesFile = readJsonFile<{ allowlist: string[] }>(resolve(ROOT, "config/currencies.json"));
+  const holidaysFile = readJsonFile<{ holidays: string[] }>(resolve(ROOT, "config/holidays.json"));
   const { keys, activeKid } = loadServerKeys();
 
   return {
@@ -164,6 +167,7 @@ export function loadConfig(): ServerConfig {
     metals: metalsFile.metals,
     routes: routesFile.routes,
     currencyAllowlist: currenciesFile.allowlist,
+    marketHolidays: holidaysFile.holidays,
     fetchOnBoot: envBool("MPK_FETCH_ON_BOOT", true),
     dataDir: resolve(ROOT, envStr("MPK_DATA_DIR", "data")),
     remoteConfigFile: resolve(ROOT, envStr("MPK_REMOTE_CONFIG_FILE", "config/remote-config.json")),

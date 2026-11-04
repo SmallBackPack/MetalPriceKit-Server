@@ -298,30 +298,37 @@ export function createApp(deps: AppDeps): express.Express {
   /**
    * 契约里的结构化配置（契约 3.1）。
    * 固定结构，客户端按强类型解码。
+   *
+   * 结构由契约定死，但**值**来自通用配置文件（config/remote-config.json），
+   * 不在代码里再存一份 —— 两份副本迟早会漂移，改文案还要发版。
+   * 文件缺项时才用兜底值。
    */
   app.get(routes.config, (req: Request, res: Response) => {
     const generic = genericConfig.load();
+    const values = generic.values;
+
     const payload = {
       serverTime: new Date().toISOString(),
       configVersion: generic.configVersion,
-      features: {
-        showGuide: true,
-        guideVersion: 1,
-      },
+      features: asObject(values["features"]) ?? { showGuide: true, guideVersion: 1 },
       runtime: {
-        pollIntervalSeconds: Math.round(config.pollIntervalMs / 1000),
+        // 客户端轮询「我们」的间隔。由配置文件决定，改完热生效，不用发版。
+        pollIntervalSeconds:
+          typeof values["pollIntervalSeconds"] === "number" ? values["pollIntervalSeconds"] : 15,
+        // 我们拉上游的间隔 —— 数据本身多久更新一次。
+        // 客户端据此判断要不要提示「数据较旧」，别让用户以为是秒级实时。
+        upstreamRefreshSeconds: Math.round(config.pollIntervalMs / 1000),
       },
       app: {
         minSupportedVersion: "1.0.0",
         latestVersion: "1.0.0",
         updateUrl: "",
       },
-      marketing: {
+      marketing: asObject(values["marketing"]) ?? {
         bannerText: "",
         bannerUrl: "",
         noticeTitle: "行情数据说明",
-        noticeContent:
-          "本应用行情来自第三方数据源，可能存在延迟，仅供参考，不构成投资建议。",
+        noticeContent: "本应用行情来自第三方数据源，可能存在延迟，仅供参考，不构成投资建议。",
       },
     };
     send(req, res, payload, { cacheControl: "max-age=300" });
@@ -410,7 +417,16 @@ export function createApp(deps: AppDeps): express.Express {
   // ── 反馈 / 崩溃 / 埋点 ─────────────────────────────────────────
 
   app.post(routes.feedback, (req: Request, res: Response) => {
+    if (!checkTokenLimit(req, res)) {
+      res.status(429).json({ error: "too_many_requests" });
+      return;
+    }
+    // 契约 §1.4：反馈需要 token —— 反馈要能关联到人，否则工单没法回访。
     const user = currentUser(req);
+    if (!user) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
     const body = readBody(req) as {
       category?: string;
       content?: string;
@@ -424,7 +440,7 @@ export function createApp(deps: AppDeps): express.Express {
       return;
     }
     const ticketId = users.insertFeedback({
-      userId: user?.id ?? null,
+      userId: user.id,
       category: typeof body?.category === "string" ? body.category.slice(0, 32) : "other",
       content: content.slice(0, 4000),
       contact: typeof body?.contact === "string" ? body.contact.slice(0, 200) : "",
@@ -446,9 +462,18 @@ export function createApp(deps: AppDeps): express.Express {
   });
 
   app.post(routes.events, (req: Request, res: Response) => {
+    if (!checkTokenLimit(req, res)) {
+      res.status(429).json({ error: "too_many_requests" });
+      return;
+    }
+    // 契约接口总表：埋点需要 token。
     const user = currentUser(req);
+    if (!user) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
     const body = readBody(req) as { sessionId?: string; events?: unknown[] };
-    users.insertEvents(user?.id ?? null, body?.sessionId ?? null, body?.events ?? []);
+    users.insertEvents(user.id, body?.sessionId ?? null, body?.events ?? []);
     res.status(204).end();
   });
 
@@ -507,4 +532,12 @@ function etagSource(payload: unknown): string {
     return JSON.stringify(copy);
   }
   return JSON.stringify(payload);
+}
+
+/** 取一个 JSON 对象，取不到就返回 null。用来把通用配置里的子对象安全取出来。 */
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
 }
