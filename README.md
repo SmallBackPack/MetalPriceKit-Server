@@ -16,10 +16,10 @@ MetalPriceKit 金属价格 App 的配套后端。
 ```bash
 npm install
 
-export METALS_DEV_API_KEY=<你的 metals.dev key>
-export MPK_SERVER_KEYS=$(node -e "console.log('k1:'+require('crypto').randomBytes(32).toString('base64'))")
-
-npm start
+# 客户端联调用假数据模式：不请求上游、不消耗额度
+cp .env.local.example .env.local    # Windows: copy
+# 填上 MPK_SERVER_KEYS 后
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 start
 ```
 
 另开一个终端验证整条加解密链路：
@@ -30,6 +30,21 @@ node scripts/smoke.ts http://127.0.0.1:8787
 
 > Node 26 可以**直接运行 `.ts` 文件**，不需要构建步骤，也不需要 tsx/ts-node。
 > 这是当初选 Node 的原因之一：少三样东西。
+
+## 假数据模式（客户端联调）
+
+```bash
+MPK_MOCK=true                # 不请求上游，不消耗额度
+MPK_POLL_INTERVAL_MS=15000   # 15 秒一轮，客户端能看到价格在动
+```
+
+上游免费档一个月只有 100 次请求 —— 联调打真实上游几天就烧光，
+而额度要等下个月才重置。假数据模式下**接口形状、加密、字段全是真的**，
+只有价格是模拟的，联调通过的部分切回真实数据后不用重测。
+
+假数据有两处标记：`X-MPK-Mock: 1` 响应头 + `quotes[].dataSource: "mock"`。
+
+切回真实数据：把 `MPK_MOCK` 改成 `false` 再 restart，客户端代码一行不用改。
 
 ## 本地启停（Windows）
 
@@ -134,6 +149,9 @@ MetalPriceKit-Server/
 | `changeRate` 传原始小数 | `0.0123` = 1.23%，不乘 100、不下发格式化字符串 |
 | 缺数据就是缺 | 不塞 0 兜底。缺一个品种列表就少一条 |
 | 生产环境强制加密 | 没有客户端公钥就返回 400，不降级成明文 —— 否则加密形同虚设 |
+| 假数据模式与真实源共用一个接口 | 联调时形状、加密、字段全真跑，只有价格是假的 —— 切回真实数据不用重测 |
+| 假数据用独立的数据目录 | 采集器会写「当日收盘价」，假数据写进去会覆盖真实历史，把涨跌基准搞错 |
+| 付费买的是请求配额，不是数据延迟 | 上游所有档位延迟都是 ≤60 秒。真正的瓶颈是我们的轮询频率被配额卡死 |
 | 交易时段按伦敦本地时间判 | 金属现货的参照时区是 LBMA。用固定 UTC 边界会在夏令时切换时漂移一小时 |
 | 只判「有把握的休市」 | 把开市判成休市会让用户错过行情；反过来只是少个提示，涨跌额沿用已兜住 |
 | 配置单一来源 | `features` / `marketing` / `pollIntervalSeconds` 存在 `remote-config.json` 里，代码里不再存副本 |
