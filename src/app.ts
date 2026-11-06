@@ -533,6 +533,7 @@ export function createApp(deps: AppDeps): express.Express {
     db: users.db,
     genericConfig,
     adminToken: config.adminToken,
+    localOnly: config.adminLocalOnly,
   });
 
   // ── 兜底 ───────────────────────────────────────────────────────

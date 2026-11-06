@@ -84,6 +84,14 @@ export interface ServerConfig {
    * 跟客户端的匿名 token 完全不是一个东西。
    */
   adminToken: string;
+  /**
+   * 后台是否只允许回环地址访问。
+   *
+   * 开发阶段（纯内网）设 false —— 后台跟着服务在局域网上一起开放，
+   * 手机连本机调试时顺便就能开后台看统计。
+   * 生产环境必须 true —— 公网上绝不暴露后台，远程走 SSH 隧道。
+   */
+  adminLocalOnly: boolean;
   /** 设备标识哈希用的 pepper 文件。环境变量 MPK_ID_PEPPER 优先。 */
   idPepperFile: string;
 }
@@ -199,6 +207,8 @@ export function loadConfig(): ServerConfig {
     remoteConfigFile: resolve(ROOT, envStr("MPK_REMOTE_CONFIG_FILE", "config/remote-config.json")),
     remoteConfigBackupDir: resolve(ROOT, dataDir, "config-backups"),
     adminToken: envStr("MPK_ADMIN_TOKEN", ""),
+    // 默认只允许本机访问。开发阶段改成 false 让后台跟着服务在局域网上开放。
+    adminLocalOnly: envBool("MPK_ADMIN_LOCAL_ONLY", true),
     idPepperFile: resolve(ROOT, dataDir, "id-pepper"),
   };
 }

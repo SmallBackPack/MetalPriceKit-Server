@@ -32,6 +32,18 @@ export interface AdminDeps {
   genericConfig: ConfigStore;
   /** 管理口令。没配就是后台没启用。 */
   adminToken: string;
+  /**
+   * 后台是否只允许回环地址访问。
+   *
+   * 开发阶段（纯内网、全部自己人用）设 false —— 后台跟着服务一起在局域网上开放，
+   * 手机连本机调试时顺便就能开后台看统计，不用再开 SSH 隧道。
+   * 生产环境保持 true —— 公网上绝不暴露后台。
+   *
+   * 判定依据是请求的来源 IP：来自 127.0.0.1 / ::1 的放行，
+   * 其余一律 403。走 SSH 隧道时 Nginx 传来的 X-Forwarded-For 是真实客户端 IP，
+   * 但隧道入口本身在服务器上就是回环，所以那种部署不受影响。
+   */
+  localOnly: boolean;
 }
 
 const CSS_PATH = resolve(import.meta.dirname, "assets/admin.css");
@@ -42,7 +54,7 @@ const CSRF_FIELD = "csrf";
 const CSRF_HEADER = "x-mpk-admin-csrf";
 
 export function registerAdminRoutes(app: express.Express, deps: AdminDeps): void {
-  const { db, genericConfig, adminToken } = deps;
+  const { db, genericConfig, adminToken, localOnly } = deps;
 
   // 表单提交用 application/x-www-form-urlencoded。
   // 只挂在 /admin 上 —— 客户端接口全是 JSON，不该多解析一种 body。
@@ -52,6 +64,31 @@ export function registerAdminRoutes(app: express.Express, deps: AdminDeps): void
   app.get("/admin/static/admin.css", (_req: Request, res: Response) => {
     res.type("text/css").setHeader("Cache-Control", "max-age=3600").send(readFileSync(CSS_PATH, "utf8"));
   });
+
+  /**
+   * 回环地址判断。
+   *
+   * 只认 127.0.0.0/8 和 ::1。IPv4-mapped 的 ::ffff:127.0.0.1 也算回环 ——
+   * 双栈栈下 Node 看到的是这个形式。
+   */
+  function isLoopback(req: Request): boolean {
+    const ip = req.ip ?? req.socket.remoteAddress ?? "";
+    const bare = ip.replace(/^::ffff:/, "");
+    return bare === "::1" || bare.startsWith("127.");
+  }
+
+  /** 生产模式下的额外护栏：非回环来源一律拒绝访问后台。 */
+  function requireLocal(req: Request, res: Response, next: express.NextFunction): void {
+    if (!localOnly || isLoopback(req)) {
+      next();
+      return;
+    }
+    res.status(403).type("text/html").send(
+      `<!DOCTYPE html><meta charset="utf-8"><title>后台仅限本机访问</title>` +
+        `<body style="font-family:system-ui;padding:40px">后台仅限本机访问。` +
+        `需要远程访问请走 SSH 隧道：<code>ssh -L 8787:127.0.0.1:8787 user@server</code></body>`,
+    );
+  }
 
   if (!adminToken) {
     // 没配口令就是没开后台。返回 503 而不是 404 ——
@@ -106,6 +143,10 @@ export function registerAdminRoutes(app: express.Express, deps: AdminDeps): void
     }
     res.redirect(302, "/admin/login");
   }
+
+  // 本机限制挂在所有后台路由前面 —— 登录页也要挡，
+  // 否则「后台没开」这件事本身就成了一个可探测的信息。
+  app.use("/admin", requireLocal);
 
   // ── 登录 / 登出 ────────────────────────────────────────────────
 

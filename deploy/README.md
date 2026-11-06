@@ -83,11 +83,15 @@ powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 stop
 | 地址 | 是什么 |
 |---|---|
 | `http://127.0.0.1:8787` | 行情接口 |
+| `http://192.168.1.8:8787` | 同一个服务，手机真机调试用这个 |
 | `http://127.0.0.1:8787/admin` | 运营后台（口令 = `.env.local` 的 `MPK_ADMIN_TOKEN`） |
 | `http://127.0.0.1:8787/health` | 探活 |
 
 > `.env.local` 默认是**假数据模式**（`MPK_MOCK=true`），不请求上游、不消耗额度。
 > 要打真实上游就改成 `false` 再 restart。
+>
+> **手机连不上先查 `HOST`**：它必须是 `0.0.0.0`（监听所有网卡），
+> `127.0.0.1` 只接受本机连接。然后查防火墙有没有放行 TCP 8787 的入站。
 
 ## 上线顺序建议
 

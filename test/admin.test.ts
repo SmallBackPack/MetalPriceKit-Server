@@ -71,6 +71,7 @@ const config = {
   remoteConfigFile: "",
   remoteConfigBackupDir: "",
   adminToken: ADMIN_TOKEN,
+  adminLocalOnly: false,
   idPepperFile: "",
 } as unknown as ServerConfig;
 
@@ -429,6 +430,41 @@ test("后台配置文件不存在时不会崩", async () => {
   const loaded = store.load();
   assert.deepEqual(loaded.values, {});
   assert.equal(existsSync(missing), false);
+});
+
+test("MPK_ADMIN_LOCAL_ONLY=true 时非回环来源被拒（403）", async () => {
+  // 单独起一个只允许本机访问的实例。
+  const strictConfig = { ...config, adminLocalOnly: true } as unknown as ServerConfig;
+  const db = new DatabaseSync(":memory:");
+  const users = new UserStore(db, { pepper: PEPPER });
+  const genericConfig = new ConfigStore(configFile, { backupDir });
+  const strictApp = createApp({
+    config: strictConfig,
+    collector: new Collector({
+      config: strictConfig,
+      store: new Store(new DatabaseSync(":memory:")),
+      upstream: new MockUpstreamClient({ config: strictConfig }),
+      log: () => {},
+    }),
+    store: new Store(new DatabaseSync(":memory:")),
+    users,
+    genericConfig,
+  });
+  const strictServer = strictApp.listen(0, "127.0.0.1");
+  await new Promise<void>((r) => strictServer.once("listening", () => r()));
+  const port = (strictServer.address() as { port: number }).port;
+
+  // 本机访问放行。
+  const local = await fetch(`http://127.0.0.1:${port}/admin/login`);
+  assert.equal(local.status, 200);
+
+  // 伪造一个非回环来源 IP —— 模拟来自局域网的请求。
+  const remote = await fetch(`http://127.0.0.1:${port}/admin/login`, {
+    headers: { "x-forwarded-for": "192.168.1.50" },
+  });
+  assert.equal(remote.status, 403);
+
+  await new Promise<void>((r) => strictServer.close(() => r()));
 });
 
 test("配置文件的排版规则与手写的一致（改一个字段只差一行）", () => {

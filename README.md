@@ -71,11 +71,36 @@ powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 logs -Tail 50
 | 地址 | 是什么 |
 |---|---|
 | `http://127.0.0.1:8787` | 行情接口（路径混淆后的那些） |
+| `http://192.168.1.8:8787` | **同一个服务，手机真机调试用这个** |
 | `http://127.0.0.1:8787/admin` | 运营后台（口令见 `.env.local` 的 `MPK_ADMIN_TOKEN`） |
 | `http://127.0.0.1:8787/health` | 探活 |
 
 **配置全部从 `.env.local` 读**，脚本自己加载，不用每次手动设环境变量。
 Node 也自动找 `F:\tools\node\node.exe`，不在 PATH 里也能跑。
+
+### 手机真机调试
+
+`.env.local` 里 `HOST=0.0.0.0`（监听所有网卡），手机连同一个 WiFi 就能直接访问：
+
+```
+http://192.168.1.8:8787
+```
+
+先查本机 IP（Windows）：
+
+```powershell
+ipconfig | Select-String 'IPv4'
+```
+
+**连不上先看这三样**：
+
+1. `HOST` 是不是 `0.0.0.0`。`127.0.0.1` 只接受本机连接，从手机访问会直接被拒 ——
+   服务端的 socket 只在回环网卡上，局域网网卡的 8787 端口压根没有监听。
+2. 防火墙。已有 `Node.js JavaScript Runtime` 的 Allow 规则的话不用管；
+   没有就手动放行一条 TCP 8787 的入站规则。
+3. 手机和电脑在不在同一个网段，WiFi 有没有开「AP 隔离 / 客户端隔离」。
+
+> 生产环境的 `HOST` 是 `127.0.0.1`（公网走 Nginx 反代），不要在生产用 `0.0.0.0`。
 
 ### 不想用脚本时
 
@@ -95,7 +120,7 @@ node src/index.ts
 
 这条是**前台运行**（Ctrl+C 停），适合调试看堆栈。
 
-### 两个容易踩的坑
+### 三个容易踩的坑
 
 1. **本地重启默认不重新拉上游**（`MPK_FETCH_ON_BOOT=false`）——
    启动时先从本地快照恢复，立即就能对外服务。
@@ -103,6 +128,8 @@ node src/index.ts
    想强制刷新一次：把 `.env.local` 里那行改成 `true` 再 restart。
 2. **`.env.local` 默认是假数据模式**（`MPK_MOCK=true`，15 秒一轮）。
    要打真实上游就改成 `false` 再 restart —— 客户端代码一行不用改。
+3. **`HOST=127.0.0.1` 手机连不上**。这个值决定服务端在哪个网卡上监听，
+   `127.0.0.1` 只接受本机连接。真机调试要 `0.0.0.0`，见上面「手机真机调试」。
 
 Linux 生产环境用 systemd，见 [`deploy/README.md`](deploy/README.md)：
 
@@ -123,6 +150,9 @@ sudo journalctl -u metalpricekit-server -f
 ```bash
 # 配置管理口令（没配则后台关闭，/admin 返回 503）
 MPK_ADMIN_TOKEN=<随机串>
+# 后台是否只允许本机访问。开发阶段（纯内网）设 false，
+# 后台跟着服务一起在局域网上开放；生产环境必须 true。
+MPK_ADMIN_LOCAL_ONLY=false
 ```
 
 后台只在本机监听，远程走 SSH 隧道：
