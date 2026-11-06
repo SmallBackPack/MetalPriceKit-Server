@@ -31,6 +31,35 @@ node scripts/smoke.ts http://127.0.0.1:8787
 > Node 26 可以**直接运行 `.ts` 文件**，不需要构建步骤，也不需要 tsx/ts-node。
 > 这是当初选 Node 的原因之一：少三样东西。
 
+## 本地启停（Windows）
+
+`scripts/svc.ps1` 管四个动作：启动、停止、重启、看状态。进程是独立后台进程，关掉终端也不影响。
+
+```powershell
+# 首次：准备环境变量（复制模板并填 key）
+copy .env.local.example .env.local
+
+# 启停
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 start
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 stop
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 restart
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 status
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 logs -Tail 50
+```
+
+Linux 生产环境用 systemd，见 [`deploy/README.md`](deploy/README.md)：
+
+```bash
+sudo systemctl start|stop|restart|status metalpricekit-server
+sudo journalctl -u metalpricekit-server -f
+```
+
+> **本地重启默认不重新拉上游**（`MPK_FETCH_ON_BOOT=false`）——
+> 启动时先从本地快照恢复，立即就能对外服务。
+> 额度一个月只有 100 次，每次启动都烧一次太浪费。
+> 想强制刷新一次：把 `.env.local` 里那行改成 `true` 再 restart，或跑一次
+> `node scripts/svc.ps1 restart`。
+
 ---
 
 ## 目录结构
@@ -58,7 +87,8 @@ MetalPriceKit-Server/
 │   └── logger.ts               单行 JSON 日志
 ├── scripts/
 │   ├── smoke.ts                客户端侧参考实现 + 部署自检
-│   └── gen-routes.ts           生成新的混淆路径表
+│   ├── gen-routes.ts           生成新的混淆路径表
+│   └── svc.ps1                 本地服务启停（start/stop/restart/status/logs）
 ├── deploy/                     部署产物（可直接复制）
 │   ├── env.example             环境变量模板
 │   ├── metalpricekit-server.service   systemd unit
@@ -66,7 +96,8 @@ MetalPriceKit-Server/
 │   └── backup.sh               SQLite 备份脚本
 ├── test/                       node:test，全部打本地假上游（不烧真额度）
 └── docs/
-    ├── 客户端接入指南.md        ← Swift 端照着这份接
+    ├── 接口文档.md              ← 给客户端的接口参考（真实响应示例）
+    ├── 客户端接入指南.md        ← Swift 端照着这份接（加密协议 + 代码）
     └── 服务端部署与额度.md      ← 部署 + 额度账本 + 套餐建议
 ```
 
@@ -148,6 +179,8 @@ npm test
 
 ## 相关文档
 
-- 客户端接入（**Swift 端看这份**）：[`docs/客户端接入指南.md`](docs/客户端接入指南.md)
-- 部署与额度：[`docs/服务端部署与额度.md`](docs/服务端部署与额度.md)
+- **接口文档**（交给客户端的那份）：[`docs/接口文档.md`](docs/接口文档.md)
+- **客户端接入**（Swift 端看这份）：[`docs/客户端接入指南.md`](docs/客户端接入指南.md)
+- **部署与额度**：[`docs/服务端部署与额度.md`](docs/服务端部署与额度.md)
+- **部署产物**：[`deploy/README.md`](deploy/README.md)
 - 业务契约（客户端仓库）：`MetalPriceKit-main/Docs/服务端API设计.md`
