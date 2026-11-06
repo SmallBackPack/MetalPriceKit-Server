@@ -28,19 +28,20 @@ import type { ServerConfig } from "./config.ts";
 import type { SnapshotRecord } from "./store.ts";
 import { Store, tradeDateOf } from "./store.ts";
 import { computeChange } from "./market.ts";
-import { normalizeLatest, QuotaExceededError, UpstreamClient } from "./upstream.ts";
+import { normalizeLatest, QuotaExceededError, type UpstreamSource } from "./upstream.ts";
 
 export interface CollectorOptions {
   config: ServerConfig;
   store: Store;
-  upstream: UpstreamClient;
+  /** 数据源。真实上游与假数据实现共用这一个接口。 */
+  upstream: UpstreamSource;
   log: (level: "info" | "warn" | "error", message: string, extra?: unknown) => void;
 }
 
 export class Collector {
   private readonly config: ServerConfig;
   private readonly store: Store;
-  private readonly upstream: UpstreamClient;
+  private readonly upstream: UpstreamSource;
   private readonly log: CollectorOptions["log"];
 
   private timer: NodeJS.Timeout | null = null;
@@ -98,9 +99,13 @@ export class Collector {
    *
    * 额度刹车：当月剩余秒数 ÷ 剩余配额次数 = 每次调用最短间隔。
    * 与配置间隔取大者 —— 配置想更快，但额度不允许时，以额度为准。
+   *
+   * 假数据模式不刹车：压根没有额度要省，按配置间隔跑，
+   * 客户端才能看到价格隔几秒就变一次。
    */
   nextIntervalMs(now = Date.now()): number {
     const configured = this.config.pollIntervalMs;
+    if (this.config.mockMode) return configured;
     const month = monthKey(new Date(now));
     const used = Math.max(this.store.monthUsage(month), this.upstream.used);
     const remainingCalls = Math.max(0, this.config.monthlyRequestBudget - used);
@@ -159,6 +164,17 @@ export class Collector {
       const tradeDate = tradeDateOf(normalized.asOf);
       const codes = [...normalized.prices.keys()];
 
+      // 假数据模式首次运行：播种「上一交易日收盘价」。
+      // 不播种的话涨跌额永远是 0（没有基准可比），客户端测不了涨跌显示。
+      if (this.config.mockMode && !this.store.hasAnyDailyClose()) {
+        const baseline = this.upstream.baselinePrices;
+        if (baseline && Object.keys(baseline).length > 0) {
+          const seedDate = previousDate(tradeDate);
+          this.store.seedDailyClose(seedDate, baseline);
+          this.log("info", "假数据模式：已播种上一交易日的基准收盘价", { date: seedDate });
+        }
+      }
+
       // 先取上一交易日的收盘价与涨跌额，再算今天的涨跌。
       const prevCloses = this.store.prevCloseMap(codes, tradeDate);
       const prevChanges = this.store.prevChangeMap(codes, tradeDate);
@@ -208,6 +224,11 @@ export class Collector {
 
 export function monthKey(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** 前一个 UTC 日期（YYYY-MM-DD）。用来给假数据播种「上一交易日」的基准。 */
+export function previousDate(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 }
 
 /** 距离下个月 1 号 00:00 UTC 还有多少秒。额度按自然月重置，所以对齐 UTC。 */

@@ -70,7 +70,28 @@ export interface UpstreamClientOptions {
   onUsage?: (used: number, remaining: number) => void;
 }
 
-export class UpstreamClient {
+/**
+ * 上游数据源。
+ *
+ * 真实实现（UpstreamClient）与假数据实现（MockUpstreamClient）共用这一个接口，
+ * 采集器不关心数据从哪来 —— 切模式只换一行构造代码。
+ */
+export interface UpstreamSource {
+  fetchLatest(): Promise<UpstreamLatest>;
+  /** 本月已消耗的请求数。mock 恒为 0。 */
+  readonly used: number;
+  /** 本月剩余可用次数。 */
+  readonly remaining: number;
+  /**
+   * 基准价（我们的品种 code → 价格）。
+   *
+   * mock 模式用它播种「上一交易日收盘价」—— 不播种的话涨跌额永远是 0，
+   * 客户端测不了涨跌显示。真实上游返回 null。
+   */
+  readonly baselinePrices: Record<string, number> | null;
+}
+
+export class UpstreamClient implements UpstreamSource {
   private readonly config: ServerConfig;
   private readonly onUsage?: (used: number, remaining: number) => void;
   /** 本进程内已消耗的请求数（跨月自动清零）。 */
@@ -91,6 +112,11 @@ export class UpstreamClient {
   /** 本月剩余可用次数（按预算上限算，不含平台自身余量）。 */
   get remaining(): number {
     return Math.max(0, this.config.monthlyRequestBudget - this.used);
+  }
+
+  /** 真实上游没有「基准价」的概念 —— 涨跌基准靠服务端自己的每日留档。 */
+  get baselinePrices(): Record<string, number> | null {
+    return null;
   }
 
   private rollMonthIfNeeded(): void {

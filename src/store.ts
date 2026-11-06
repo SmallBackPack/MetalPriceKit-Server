@@ -179,6 +179,22 @@ export class Store {
   }
 
   /**
+   * 播种某一天的收盘价（涨跌记 0）。
+   *
+   * 只给假数据模式用：第一次跑没有任何历史，涨跌额会一直是 0，
+   * 客户端测不了涨跌显示。播一份「上一交易日」的基准就有了。
+   */
+  seedDailyClose(tradeDate: string, prices: Record<string, number>): void {
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO daily_close (trade_date, code, price, change, change_rate)
+       VALUES (?, ?, ?, 0, 0)`,
+    );
+    for (const [code, price] of Object.entries(prices)) {
+      stmt.run(tradeDate, code, price);
+    }
+  }
+
+  /**
    * 取「早于指定交易日」的最近一次收盘观测值。
    *
    * 严格小于 today：今天的观测不能当自己的「上一交易日收盘」用。

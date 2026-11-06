@@ -73,6 +73,9 @@ export function createApp(deps: AppDeps): express.Express {
     const incoming = req.header("x-request-id");
     const requestId = incoming && incoming.length <= 64 ? incoming : randomUUID();
     res.setHeader("X-Request-Id", requestId);
+    // 假数据模式标记。放最前面 —— 每个响应都要有，包括错误响应，
+    // 这样排查时一眼就知道这台服务给的是不是真行情。
+    if (config.mockMode) res.setHeader("X-MPK-Mock", "1");
     next();
   });
 

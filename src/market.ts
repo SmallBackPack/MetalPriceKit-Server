@@ -44,6 +44,13 @@ export interface QuotesPayload {
   serverTime: string;
   marketStatus: MarketStatus;
   changeBasis: "prevClose";
+  /**
+   * 数据来源。`mock` = 假数据（客户端联调模式），`live` = 真实上游。
+   *
+   * 为什么要显式告诉客户端：假数据长得跟真数据一模一样，
+   * 万一联调用的 App 被误当成正式版发出去，得能一眼认出来。
+   */
+  dataSource: "live" | "mock";
   quotes: Quote[];
 }
 
@@ -228,6 +235,7 @@ export function buildQuotesPayload(
     serverTime: now.toISOString(),
     marketStatus,
     changeBasis: "prevClose",
+    dataSource: config.mockMode ? "mock" : "live",
     quotes,
   };
 }

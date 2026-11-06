@@ -67,6 +67,13 @@ export interface ServerConfig {
   marketHolidays: string[];
   /** 启动时是否立刻拉一次上游（不拉则等首个轮询周期）。 */
   fetchOnBoot: boolean;
+  /**
+   * 假数据模式。不请求上游，数据是模拟的，**不消耗额度**。
+   *
+   * 客户端联调用这个 —— 真实上游一个月只有 100 次额度，
+   * 联调阶段打真实上游几天就能烧光，而额度要等下个月才重置。
+   */
+  mockMode: boolean;
   dataDir: string;
   /** 通用字段字典的文件路径。改文件即生效，不用重启。 */
   remoteConfigFile: string;
@@ -154,6 +161,13 @@ export function loadConfig(): ServerConfig {
   const currenciesFile = readJsonFile<{ allowlist: string[] }>(resolve(ROOT, "config/currencies.json"));
   const holidaysFile = readJsonFile<{ holidays: string[] }>(resolve(ROOT, "config/holidays.json"));
   const { keys, activeKid } = loadServerKeys();
+  const mockMode = envBool("MPK_MOCK", false);
+
+  // 假数据模式用独立的数据目录。
+  // 原因：采集器会把「当日收盘价」写进 daily_close，而涨跌基准正是从那里取的。
+  // 假数据写进去会覆盖真实行情的历史，切回真实数据后涨跌就算错了。
+  // 分开存，真实历史一点不脏。
+  const dataDir = envStr("MPK_DATA_DIR", mockMode ? "data-mock" : "data");
 
   return {
     port: envInt("PORT", 8787),
@@ -168,8 +182,11 @@ export function loadConfig(): ServerConfig {
     routes: routesFile.routes,
     currencyAllowlist: currenciesFile.allowlist,
     marketHolidays: holidaysFile.holidays,
-    fetchOnBoot: envBool("MPK_FETCH_ON_BOOT", true),
-    dataDir: resolve(ROOT, envStr("MPK_DATA_DIR", "data")),
+    // 假数据模式默认启动即拉一次 —— 不花额度，没理由让人等。
+    // 真实上游默认不拉：每次启动都烧一次额度太浪费（一个月才 100 次）。
+    fetchOnBoot: envBool("MPK_FETCH_ON_BOOT", mockMode),
+    mockMode,
+    dataDir: resolve(ROOT, dataDir),
     remoteConfigFile: resolve(ROOT, envStr("MPK_REMOTE_CONFIG_FILE", "config/remote-config.json")),
   };
 }

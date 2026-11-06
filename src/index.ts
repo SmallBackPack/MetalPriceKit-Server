@@ -14,6 +14,7 @@
 import { loadConfig } from "./config.ts";
 import { createApp } from "./app.ts";
 import { Collector } from "./collector.ts";
+import { MockUpstreamClient } from "./mock.ts";
 import { Store } from "./store.ts";
 import { UserStore } from "./userstore.ts";
 import { ConfigStore } from "./configstore.ts";
@@ -26,10 +27,6 @@ import { existsSync, mkdirSync } from "node:fs";
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  if (!config.upstreamApiKey) {
-    log("warn", "未配置 METALS_DEV_API_KEY：上游不可用，服务将以本地快照对外服务");
-  }
-
   mkdirSync(config.dataDir, { recursive: true });
 
   // 市场数据与用户数据分开两个 SQLite 文件：
@@ -41,7 +38,20 @@ async function main(): Promise<void> {
   const store = new Store(marketDb);
   const users = new UserStore(userDb);
 
-  const upstream = new UpstreamClient({ config });
+  // 数据源：真实上游，或假数据。
+  // 两者共用同一个接口，采集器与之后的每一层都不知道数据从哪来。
+  const upstream = config.mockMode
+    ? new MockUpstreamClient({ config })
+    : new UpstreamClient({ config });
+
+  if (config.mockMode) {
+    log("warn", "假数据模式已开启：不请求上游、不消耗额度，返回的是模拟行情", {
+      pollIntervalMs: config.pollIntervalMs,
+    });
+  } else if (!config.upstreamApiKey) {
+    log("warn", "未配置 METALS_DEV_API_KEY：上游不可用，服务将以本地快照对外服务");
+  }
+
   const collector = new Collector({ config, store, upstream, log });
 
   const genericConfig = new ConfigStore(config.remoteConfigFile);
