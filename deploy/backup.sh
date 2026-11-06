@@ -32,4 +32,17 @@ for db in market.db user.db; do
   find "$BACKUP_DIR" -name "${db%.db}-*.db" -type f -mtime +30 -delete
 done
 
+# 设备标识哈希用的 pepper。
+#
+# 必须跟 user.db 一起备份 —— 丢了它，所有设备标识的哈希全变，
+# 后台统计里的装机基数会归零重来。这个文件本身不敏感（哈希的密钥），
+# 但跟数据库配对才有意义。
+PEPPER="$DATA_DIR/id-pepper"
+if [ -f "$PEPPER" ]; then
+  cp "$PEPPER" "$BACKUP_DIR/id-pepper-$STAMP"
+  find "$BACKUP_DIR" -name "id-pepper-*" -type f -mtime +30 -delete
+else
+  echo "跳过 id-pepper（不存在，可能用了 MPK_ID_PEPPER 环境变量）"
+fi
+
 echo "备份完成：$BACKUP_DIR/$STAMP"

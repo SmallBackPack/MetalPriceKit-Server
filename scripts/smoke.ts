@@ -161,6 +161,11 @@ async function main(): Promise<void> {
 
   const fields = (await call(ROUTES.fields, clientPubB64, sessionKey)) as Record<string, unknown>;
   console.log(`通用字段：${Object.keys(fields).join(", ")}`);
+  // 单独打一个值出来：改了通用配置之后，跑一次自检就能确认
+  // 客户端真的拿到了新值（而不是被本地缓存挡住）。
+  if ("pollIntervalSeconds" in fields) {
+    console.log(`通用字段.pollIntervalSeconds=${fields["pollIntervalSeconds"]}`);
+  }
 
   console.log("自检通过：加解密链路正常。");
 }

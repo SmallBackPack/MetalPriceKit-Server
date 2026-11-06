@@ -29,6 +29,7 @@ import type { Collector } from "./collector.ts";
 import type { Store } from "./store.ts";
 import type { UserStore, UserRecord } from "./userstore.ts";
 import { ConfigStore } from "./configstore.ts";
+import { registerAdminRoutes } from "./admin/index.ts";
 import { buildFxPayload, buildMetalsPayload, buildQuotesPayload } from "./market.ts";
 import { buildAad, deriveSessionKey, isEnvelope, open, seal } from "./crypto.ts";
 import { RateLimiter } from "./ratelimit.ts";
@@ -83,6 +84,12 @@ export function createApp(deps: AppDeps): express.Express {
 
   // IP 限流兜底。token 限流在需要鉴权的接口上另算。
   app.use((req: Request, res: Response, next: NextFunction) => {
+    // 后台有自己的限流桶。运营刷新一次页面会连打几个接口，
+    // 跟客户端共用 60/min 的桶很容易被误伤。
+    if (req.path.startsWith("/admin")) {
+      next();
+      return;
+    }
     const key = req.ip ?? req.socket.remoteAddress ?? "unknown";
     const { allowed, retryAfterSeconds } = ipLimiter.hit(key);
     if (!allowed) {
@@ -361,15 +368,42 @@ export function createApp(deps: AppDeps): express.Express {
 
   // ── 匿名身份 ───────────────────────────────────────────────────
 
+  /**
+   * 匿名注册 / 换取 token。
+   *
+   * 双标识：
+   *  - deviceId：客户端存在 Keychain 里的 UUID。卸载重装不变 → 算装机基数。
+   *  - vendorId：IDFV。重装会变 → 算设备数。
+   *
+   * 两者都由客户端生成，服务端只做哈希存储（userstore 内部处理），库里不留原始值。
+   * 其余字段（版本、系统、机型、语言）纯是统计用的上报，缺了也不影响身份。
+   */
   app.post(routes.auth, (req: Request, res: Response) => {
-    const body = readBody(req) as { deviceId?: string; appVersion?: string; build?: string };
+    const body = readBody(req) as {
+      deviceId?: string;
+      vendorId?: string;
+      appVersion?: string;
+      build?: string;
+      osVersion?: string;
+      deviceModel?: string;
+      locale?: string;
+      timeZone?: string;
+    };
     const deviceId = typeof body?.deviceId === "string" ? body.deviceId.trim() : "";
     if (!deviceId || deviceId.length > 128) {
       res.status(400).json({ error: "invalid_device_id" });
       return;
     }
 
-    const { user, isNewUser } = users.findOrCreateByDevice(deviceId);
+    const { user, isNewUser } = users.findOrCreateByDevice(deviceId, {
+      vendorId: clip(body.vendorId, 256),
+      appVersion: clip(body.appVersion, 32),
+      appBuild: clip(body.build, 32),
+      osVersion: clip(body.osVersion, 32),
+      deviceModel: clip(body.deviceModel, 64),
+      locale: clip(body.locale, 32),
+      timeZone: clip(body.timeZone, 64),
+    });
     const { token, expiresAt } = users.issueToken(user.id, deviceId);
     const payload = {
       userId: user.id,
@@ -491,6 +525,16 @@ export function createApp(deps: AppDeps): express.Express {
     res.status(204).end();
   });
 
+  // ── 运营后台 ───────────────────────────────────────────────────
+
+  // 放在兜底 404 之前。后台不走路径混淆、不加密 ——
+  // 它只在 127.0.0.1 上，鉴权靠独立的管理口令。
+  registerAdminRoutes(app, {
+    db: users.db,
+    genericConfig,
+    adminToken: config.adminToken,
+  });
+
   // ── 兜底 ───────────────────────────────────────────────────────
 
   app.use((_req: Request, res: Response) => {
@@ -554,4 +598,17 @@ function asObject(value: unknown): Record<string, unknown> | null {
     return value as Record<string, unknown>;
   }
   return null;
+}
+
+/**
+ * 截断上报字段的长度。
+ *
+ * 空字符串一律当成「没报」返回 undefined —— 空值塞进统计表会多出一堆
+ * 「空字符串」分组，看着像有数据，其实是没数据。
+ */
+function clip(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, maxLength);
 }

@@ -24,3 +24,6 @@ data-mock/
 .idea/
 .vscode/
 *.swp
+
+# 临时用的提交消息文件（PowerShell 传中文提交信息时用它绕开引号问题）
+.git-commit-msg.txt

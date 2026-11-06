@@ -31,6 +31,8 @@ sudo chown -R mpk:mpk /opt/metalpricekit-server
 sudo cp deploy/env.example /etc/metalpricekit-server.env
 node -e "console.log('k1:'+require('crypto').randomBytes(32).toString('base64'))"
 #   ↑ 把输出填进 /etc/metalpricekit-server.env 的 MPK_SERVER_KEYS
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+#   ↑ 这条填进 MPK_ADMIN_TOKEN（运营后台管理口令；不填则后台关闭）
 sudo chmod 600 /etc/metalpricekit-server.env
 
 # 5. systemd
@@ -55,3 +57,15 @@ node scripts/smoke.ts https://api.example.com
 
 先只对外开 `/health`，观察一天日志确认额度刹车生效（采集间隔被拉长是正常的），
 再开放业务接口。别一上来就全量上线 —— 额度烧光是要等一个月才恢复的。
+
+## 运营后台怎么访问
+
+后台**不在公网上**。`nginx.conf` 里已经带了 `location /admin { deny all; }`，
+远程访问走 SSH 隧道：
+
+```bash
+ssh -L 8787:127.0.0.1:8787 user@server
+# 浏览器打开 http://127.0.0.1:8787/admin，用 MPK_ADMIN_TOKEN 登录
+```
+
+详见 [`../docs/后台使用说明.md`](../docs/后台使用说明.md)。

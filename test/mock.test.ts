@@ -12,6 +12,8 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import {
   createPublicKey,
   diffieHellman,
@@ -169,10 +171,12 @@ before(async () => {
   const marketDb = new DatabaseSync(":memory:");
   const userDb = new DatabaseSync(":memory:");
   const store = new Store(marketDb);
-  const users = new UserStore(userDb);
+  const users = new UserStore(userDb, { pepper: "test-pepper" });
   const upstream = new MockUpstreamClient({ config });
   const collector = new Collector({ config, store, upstream, log: () => {} });
-  const genericConfig = new ConfigStore("config/remote-config.json");
+  const genericConfig = new ConfigStore("config/remote-config.json", {
+    backupDir: resolve(tmpdir(), "mpk-test-backups"),
+  });
 
   const app = createApp({ config, collector, store, users, genericConfig });
   server = app.listen(0, "127.0.0.1");

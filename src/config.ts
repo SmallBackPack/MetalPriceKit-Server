@@ -77,6 +77,15 @@ export interface ServerConfig {
   dataDir: string;
   /** 通用字段字典的文件路径。改文件即生效，不用重启。 */
   remoteConfigFile: string;
+  /** 通用字段字典的备份目录。回滚用。 */
+  remoteConfigBackupDir: string;
+  /**
+   * 后台管理口令。没配则后台不启用（/admin 一律 503）。
+   * 跟客户端的匿名 token 完全不是一个东西。
+   */
+  adminToken: string;
+  /** 设备标识哈希用的 pepper 文件。环境变量 MPK_ID_PEPPER 优先。 */
+  idPepperFile: string;
 }
 
 function envStr(key: string, fallback: string): string {
@@ -188,6 +197,9 @@ export function loadConfig(): ServerConfig {
     mockMode,
     dataDir: resolve(ROOT, dataDir),
     remoteConfigFile: resolve(ROOT, envStr("MPK_REMOTE_CONFIG_FILE", "config/remote-config.json")),
+    remoteConfigBackupDir: resolve(ROOT, dataDir, "config-backups"),
+    adminToken: envStr("MPK_ADMIN_TOKEN", ""),
+    idPepperFile: resolve(ROOT, dataDir, "id-pepper"),
   };
 }
 

@@ -1,0 +1,373 @@
+/*
+ *  admin.css
+ *  MetalPriceKit Server — 运营后台样式
+ *
+ *  自己写，不引任何 UI 库：
+ *  后台三个页面一共不到两百行 HTML，为它拉一个 CSS 框架不划算，
+ *  而且外链 CDN 在国内不稳，样式表加载失败的话后台会变成一堆没排版的文字。
+ *
+ *  配色刻意朴素 —— 后台是天天看的东西，看着不累比看着炫重要。
+ */
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --border: #e3e6ea;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --danger: #b91c1c;
+  --warn: #b45309;
+  --ok: #15803d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+body.bare {
+  background: var(--panel);
+}
+
+/* ── 顶栏 ─────────────────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.2px;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: 1;
+}
+
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+
+.nav a:hover {
+  color: var(--text);
+}
+
+.nav a.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
+}
+
+main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 15px;
+  margin: 28px 0 10px;
+}
+
+p.muted {
+  color: var(--muted);
+  margin: 4px 0 16px;
+}
+
+p.hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin: 12px 0 0;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  background: #eef0f3;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* ── 指标卡片 ─────────────────────────────────────────────────── */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.kpi-value {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.kpi-label {
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.kpi-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 12px 28px;
+  align-items: start;
+}
+
+/* ── 表格 ─────────────────────────────────────────────────────── */
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+table.data th,
+table.data td {
+  padding: 7px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+table.data thead th {
+  background: #fafbfc;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+table.data tbody tr:last-child td {
+  border-bottom: none;
+}
+
+table.data td.num,
+table.data th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 表单 ─────────────────────────────────────────────────────── */
+
+input[type="text"],
+input[type="password"],
+input[type="search"],
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 9px;
+  width: 100%;
+}
+
+textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 6px 16px;
+  width: auto;
+}
+
+button:hover {
+  filter: brightness(0.96);
+}
+
+button.secondary {
+  background: #fff;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+button.linklike {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 0;
+  text-decoration: underline;
+}
+
+form.inline {
+  display: inline;
+}
+
+.searchbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0;
+}
+
+.searchbar input[type="search"] {
+  max-width: 320px;
+}
+
+.searchbar a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.searchbar a.csv {
+  margin-left: auto;
+}
+
+.config-table textarea {
+  min-width: 320px;
+}
+
+.newrow {
+  display: grid;
+  grid-template-columns: 2fr 120px 2fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.submitrow {
+  margin: 16px 0 0;
+}
+
+/* ── 提示 ─────────────────────────────────────────────────────── */
+
+.notice {
+  border-radius: 6px;
+  padding: 9px 14px;
+  margin: 10px 0;
+  border: 1px solid;
+}
+
+.notice.ok {
+  background: #ecfdf3;
+  border-color: #bbe7c9;
+  color: var(--ok);
+}
+
+.notice.error {
+  background: #fef2f2;
+  border-color: #f5c2c2;
+  color: var(--danger);
+}
+
+.notice.warn {
+  background: #fffbeb;
+  border-color: #f3dfae;
+  color: var(--warn);
+}
+
+.preview {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  margin: 0;
+}
+
+.pager {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.pager a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ── 登录页 ───────────────────────────────────────────────────── */
+
+.login-wrap {
+  max-width: 340px;
+  margin: 12vh auto;
+  padding: 0 24px;
+}
+
+.login-wrap h1 {
+  margin-bottom: 20px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-form label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-form button {
+  margin-top: 6px;
+}

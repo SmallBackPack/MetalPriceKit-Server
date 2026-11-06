@@ -77,6 +77,33 @@ sudo journalctl -u metalpricekit-server -f
 
 ---
 
+## 运营后台
+
+服务端自带一个极简后台，两个用途：**看真实用户数**（匿名用户也统计得到）、
+**改通用字段下发**（不用 SSH 上去手改文件）。
+
+```bash
+# 配置管理口令（没配则后台关闭，/admin 返回 503）
+MPK_ADMIN_TOKEN=<随机串>
+```
+
+后台只在本机监听，远程走 SSH 隧道：
+
+```bash
+ssh -L 8787:127.0.0.1:8787 user@server
+# 浏览器打开 http://127.0.0.1:8787/admin
+```
+
+**没有前端框架、没有构建步骤、没有额外依赖** —— 页面是服务端拼出来的 HTML，
+操作都是原生表单提交。三个页面：看板、用户、配置。
+
+匿名身份是**双标识**：`deviceId` = 客户端生成并存在 Keychain 的 UUID（算装机基数），
+`vendorId` = IDFV（算设备数）。两者入库前都做 HMAC，**库里不留原始设备标识**。
+
+详见 [`docs/后台使用说明.md`](docs/后台使用说明.md)。
+
+---
+
 ## 目录结构
 
 ```
@@ -96,10 +123,18 @@ MetalPriceKit-Server/
 │   ├── collector.ts            定时采集 + 额度刹车
 │   ├── market.ts               快照 → 契约结构（涨跌基准、市场状态、过期判定）
 │   ├── store.ts                SQLite：额度计数 / 快照 / 每日收盘价
-│   ├── userstore.ts            用户、token、反馈、崩溃、埋点
-│   ├── configstore.ts          通用配置热加载
+│   ├── userstore.ts            用户、token、反馈、崩溃、埋点、日活
+│   ├── identity.ts             设备标识的 HMAC 哈希（pepper 管理）
+│   ├── configstore.ts          通用配置：热加载 + 原子写 + 版本 + 备份回滚
 │   ├── ratelimit.ts            进程内固定窗口限流
-│   └── logger.ts               单行 JSON 日志
+│   ├── logger.ts               单行 JSON 日志
+│   └── admin/                  运营后台
+│       ├── index.ts            路由装配
+│       ├── auth.ts             管理口令 + 会话 cookie + CSRF
+│       ├── stats.ts            统计查询（口径写在这一层）
+│       ├── pages.ts            三个页面的 HTML
+│       ├── render.ts           HTML 骨架与转义
+│       └── assets/admin.css    样式（不引 UI 库）
 ├── scripts/
 │   ├── smoke.ts                客户端侧参考实现 + 部署自检
 │   ├── gen-routes.ts           生成新的混淆路径表
@@ -113,6 +148,7 @@ MetalPriceKit-Server/
 └── docs/
     ├── 接口文档.md              ← 给客户端的接口参考（真实响应示例）
     ├── 客户端接入指南.md        ← Swift 端照着这份接（加密协议 + 代码）
+    ├── 后台使用说明.md          ← 后台怎么用、改配置、口径解释
     └── 服务端部署与额度.md      ← 部署 + 额度账本 + 套餐建议
 ```
 
@@ -157,6 +193,17 @@ MetalPriceKit-Server/
 | 配置单一来源 | `features` / `marketing` / `pollIntervalSeconds` 存在 `remote-config.json` 里，代码里不再存副本 |
 | `pollIntervalSeconds` 与 `upstreamRefreshSeconds` 分开 | 前者是客户端轮询我们的间隔，后者是数据本身多久更新一次。混用一个字段必然被误读 |
 | feedback / events 要 token | 对齐契约 §1.4 —— 反馈要能关联到人。崩溃上报是唯一允许匿名的例外 |
+| 匿名身份用双标识 | `deviceId`（Keychain UUID）算装机基数，`vendorId`（IDFV）算设备数。只用一个都会算错 |
+| 设备标识入库前做 HMAC | 库里不留原始设备标识。pepper 跟着数据库一起备份 |
+| 后台不引前端框架 | 三个页面、表格加表单。引框架会多出一整套构建步骤，部署从「node src/index.ts」变成「先构建再启动」 |
+| 后台页面零 JavaScript | 原生表单提交就够。少一层运行时，少一类故障 |
+| 后台与客户端 token 完全隔离 | 客户端 token 几乎人手一个，跟运营权限混在一起，一个泄漏就等于后台敞开 |
+| 登录限流只计失败次数 | 限流是防爆破的。成功登录也计数会把正常用户挡在门外 |
+| 配置写入保持原有排版 | 在控制台改一个字段，版本库 diff 只有那一行 —— 看得出到底改了什么 |
+| 配置版本号只增不减 | 客户端只认「版本号变大」才刷新缓存。回滚内容也不能回退版本号 |
+| `pollIntervalSeconds` 设下限护栏 | 所有客户端加起来就是我们的 QPS，间隔过小会打爆服务端并让同出口 IP 的用户互相限流 |
+| 埋点交给第三方平台 | 客户端侧用友盟 / TalkData，服务端不重复采集、不做埋点分析 |
+| 统计口径写在代码注释里 | 装机基数 / 活跃装机 / 设备数 / DAU / MAU 是五个不同的数，混着报谁也看不懂 |
 
 ---
 
@@ -166,7 +213,7 @@ MetalPriceKit-Server/
 npm test
 ```
 
-55 个用例，全部走**本地假上游**（`test/fixture.ts` 内含真实响应样本）。
+83 个用例，全部走**本地假上游**（`test/fixture.ts` 内含真实响应样本）。
 真实额度是真金白银，测试跑几轮就烧光了。
 
 覆盖的关键行为：
@@ -176,7 +223,10 @@ npm test
 - AAD 绑定方法与路径，密文跨接口搬运解不开
 - 篡改密文会解密失败
 - ETag 命中返回 304
-- 同一 `deviceId` 幂等注册
+- 同一 `deviceId` 幂等注册，库里存的是哈希不是原文
+- 后台未登录拿不到数据，CSRF 拦住跨站提交
+- 统计口径：装机基数 / 设备数 / DAU 各算各的
+- 配置控制台：版本 +1、自动备份、护栏拦下过小的轮询间隔、回滚内容但版本不回退
 - 额度用尽后不再向上游发请求
 - 周末 / 节假日判定为休市，夏令时边界跟着伦敦时间走
 - 周末冻结沿用上一交易日涨跌幅
@@ -199,6 +249,7 @@ npm test
 
 - **接口文档**（交给客户端的那份）：[`docs/接口文档.md`](docs/接口文档.md)
 - **客户端接入**（Swift 端看这份）：[`docs/客户端接入指南.md`](docs/客户端接入指南.md)
+- **运营后台**：[`docs/后台使用说明.md`](docs/后台使用说明.md)
 - **部署与额度**：[`docs/服务端部署与额度.md`](docs/服务端部署与额度.md)
 - **部署产物**：[`deploy/README.md`](deploy/README.md)
 - 业务契约（客户端仓库）：`MetalPriceKit-main/Docs/服务端API设计.md`

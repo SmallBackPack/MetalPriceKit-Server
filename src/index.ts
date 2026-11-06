@@ -19,6 +19,7 @@ import { Store } from "./store.ts";
 import { UserStore } from "./userstore.ts";
 import { ConfigStore } from "./configstore.ts";
 import { UpstreamClient } from "./upstream.ts";
+import { loadPepper } from "./identity.ts";
 import { log } from "./logger.ts";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -36,7 +37,10 @@ async function main(): Promise<void> {
   const userDb = new DatabaseSync(resolve(config.dataDir, "user.db"));
 
   const store = new Store(marketDb);
-  const users = new UserStore(userDb);
+  // 设备标识的哈希 pepper。先于 UserStore 读出来 ——
+  // pepper 变了，所有设备标识的哈希都变了，等于全部用户变成新用户。
+  const pepper = loadPepper(process.env.MPK_ID_PEPPER ?? "", config.idPepperFile);
+  const users = new UserStore(userDb, { pepper });
 
   // 数据源：真实上游，或假数据。
   // 两者共用同一个接口，采集器与之后的每一层都不知道数据从哪来。
@@ -54,13 +58,21 @@ async function main(): Promise<void> {
 
   const collector = new Collector({ config, store, upstream, log });
 
-  const genericConfig = new ConfigStore(config.remoteConfigFile);
+  const genericConfig = new ConfigStore(config.remoteConfigFile, {
+    backupDir: config.remoteConfigBackupDir,
+  });
   if (!existsSync(config.remoteConfigFile)) {
     // 配置是锦上添花，缺了不至于让服务起不来 —— 但必须喊一声，
     // 否则通用字段接口会一直返回空字典而没人知道。
     log("warn", "通用配置文件不存在，通用字段接口将返回空字典", {
       file: config.remoteConfigFile,
     });
+  }
+
+  if (!config.adminToken) {
+    // 后台默认是关着的。要用后台必须显式设 MPK_ADMIN_TOKEN ——
+    // 「忘了关」比「忘了开」危险得多。
+    log("warn", "未配置 MPK_ADMIN_TOKEN：运营后台未启用，/admin 一律返回 503");
   }
 
   const app = createApp({ config, collector, store, users, genericConfig });
