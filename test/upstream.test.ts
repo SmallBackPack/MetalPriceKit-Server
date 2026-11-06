@@ -50,9 +50,9 @@ test("汇率取倒数：上游给「1 X 币 = ? USD」，我们要「1 USD = ? X
   const result = normalizeLatest(LATEST_SAMPLE as never, config);
 
   // 上游 CNY = 0.1498 → 我们下发的应是 1/0.1498 ≈ 6.675
-  assert.ok(Math.abs(result.currencyRates.get("CNY")! - 1 / 0.1498035959) < 1e-9);
+  assert.ok(Math.abs(result.currencyRates.get("CNY")! - 1 / 0.1498035959) < 1e-12);
   // 上游 EUR = 1.1216 → 1 USD = 0.8916 EUR
-  assert.ok(Math.abs(result.currencyRates.get("EUR")! - 1 / 1.1216032649) < 1e-9);
+  assert.ok(Math.abs(result.currencyRates.get("EUR")! - 1 / 1.1216032649) < 1e-12);
   assert.equal(result.currencyRates.get("USD"), 1);
 });
 

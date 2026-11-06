@@ -49,10 +49,10 @@ export class Collector {
 
   /** 最近一次成功抓取的结果。内存里放一份，API 层直接读，不查库。 */
   private snapshot: SnapshotRecord | null = null;
-  /** 最近一次抓取是否失败（用于 /health）。 */
+  /** 最近一次抓取是否失败（用于 /health）。null = 本次进程还没抓过，正在用本地快照。 */
   private lastError: string | null = null;
   private lastFetchAt: string | null = null;
-  private lastFetchOk = false;
+  private lastFetchOk: boolean | null = null;
 
   constructor(options: CollectorOptions) {
     this.config = options.config;
@@ -76,8 +76,10 @@ export class Collector {
 
   get health(): {
     lastFetchAt: string | null;
-    lastFetchOk: boolean;
+    lastFetchOk: boolean | null;
     lastError: string | null;
+    /** 有没有数据可以对外服务（本地快照也算）。 */
+    hasSnapshot: boolean;
     upstreamUsed: number;
     upstreamBudget: number;
   } {
@@ -85,6 +87,7 @@ export class Collector {
       lastFetchAt: this.lastFetchAt,
       lastFetchOk: this.lastFetchOk,
       lastError: this.lastError,
+      hasSnapshot: this.snapshot !== null,
       upstreamUsed: this.upstream.used,
       upstreamBudget: this.config.monthlyRequestBudget,
     };

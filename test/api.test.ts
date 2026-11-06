@@ -389,10 +389,14 @@ test("health 不暴露供应商与配额明细", async () => {
   assert.equal(res.status, 200);
   assert.equal(body.status, "ok");
   assert.equal(typeof body.uptimeSeconds, "number");
+  // 有快照就能对外服务；lastFetchOk 为 null 表示本次进程还没抓过（不是故障）
+  assert.equal(body.hasSnapshot, true);
   // 契约明确要求：不返回供应商名称和配额明细
   assert.equal(body.plan, undefined);
   assert.equal(body.remaining, undefined);
   assert.equal(body.apiKey, undefined);
+  assert.equal(body.upstreamUsed, undefined);
+  assert.equal(body.monthlyRequestBudget, undefined);
 });
 
 test("没有客户端公钥就拿不到明文数据", async () => {

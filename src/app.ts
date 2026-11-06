@@ -241,7 +241,10 @@ export function createApp(deps: AppDeps): express.Express {
     res.json({
       status: "ok",
       lastFetchAt: h.lastFetchAt,
+      // null = 本次进程还没抓过，正在用本地快照对外服务（不是故障）。
       lastFetchOk: h.lastFetchOk,
+      // 有没有数据可以对外服务。false 时行情接口会返回 503。
+      hasSnapshot: h.hasSnapshot,
       uptimeSeconds: Math.floor(process.uptime()),
     });
   });

@@ -23,6 +23,7 @@
 import type { ServerConfig } from "./config.ts";
 import type { SnapshotRecord } from "./store.ts";
 import { tradeDateOf } from "./store.ts";
+import { roundTo } from "./num.ts";
 
 export type MarketStatus = "open" | "closed";
 
@@ -143,28 +144,6 @@ export function isStale(
 }
 
 /**
- * 按 scale 四舍五入，避免下发 14,306.866100000001 这种浮点噪声。
- *
- * 不能直接 Math.round(value * 10 ** scale)：IEEE754 下 1.005 * 100 是
- * 100.49999999999999，四舍五入会得到 1.00 而不是 1.01。
- * 先用指数写法把小数点挪到末尾（'1.005e2' 精确等于 100.5）再取整，绕开这个误差。
- */
-export function roundTo(value: number, scale: number): number {
-  if (!Number.isFinite(value)) return value;
-  const shifted = Number(`${value}e${scale}`);
-  if (!Number.isFinite(shifted)) {
-    // 极端量级下指数写法会溢出（'1e21e2' 非法），退回普通写法。
-    const factor = 10 ** scale;
-    return Math.round(value * factor) / factor;
-  }
-  // Math.round 对 .5 是「向 +∞ 取整」，负数要手动按「远离零」取整，
-  // 否则 -1.005 会变成 -1.00 而 +1.005 变成 1.01，两边不对称。
-  const magnitude = Math.round(Math.abs(shifted));
-  const rounded = shifted < 0 ? -magnitude : magnitude;
-  return Number(`${rounded}e${-scale}`);
-}
-
-/**
  * 原始涨跌幅的有效小数位。
  *
  * 上游价格最多 4 位小数，两个这样的价格相减，有效精度不会超过 4 位。
@@ -172,6 +151,15 @@ export function roundTo(value: number, scale: number): number {
  * 又不会丢掉真实精度。
  */
 const CHANGE_PRECISION = 6;
+
+/**
+ * 汇率下发的小数位。
+ *
+ * 上游给的是「1 X 币 = ? USD」，取倒数之后必然带一串浮点尾巴
+ * （1/0.2725 = 3.6725000000514147）。8 位小数已经远超汇率的实际需要，
+ * 下发干净数字，客户端格式化时也不会出现一串 0。
+ */
+const FX_RATE_PRECISION = 8;
 
 /**
  * 由「当前价」与「上一交易日收盘价」算出涨跌额与涨跌幅。
@@ -262,12 +250,21 @@ export function buildMetalsPayload(
   };
 }
 
-/** 组装 /fx 响应：汇率表。语义是「1 USD = rates[X] 个 X 币」。 */
+/**
+ * 组装 /fx 响应：汇率表。语义是「1 USD = rates[X] 个 X 币」。
+ *
+ * 收敛放在出参这一层而不是入库时：库里保留上游的完整精度，
+ * 对外才给干净数字。这样就算哪天改了精度，不用重新抓一次上游。
+ */
 export function buildFxPayload(snapshot: SnapshotRecord, now: Date = new Date()): FxPayload {
+  const rates: Record<string, number> = {};
+  for (const [code, rate] of Object.entries(snapshot.fx)) {
+    rates[code] = roundTo(rate, FX_RATE_PRECISION);
+  }
   return {
     serverTime: now.toISOString(),
     base: "USD",
     asOf: snapshot.fxAsOf,
-    rates: snapshot.fx,
+    rates,
   };
 }

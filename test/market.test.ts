@@ -16,8 +16,8 @@ import {
   computeChange,
   inferMarketStatus,
   isStale,
-  roundTo,
 } from "../src/market.ts";
+import { roundTo } from "../src/num.ts";
 import type { ServerConfig } from "../src/config.ts";
 
 const config = {
@@ -180,4 +180,15 @@ test("汇率表声明 base=USD，方向是「1 USD = rates[X] 个 X 币」", () 
   assert.equal(payload.rates["USD"], 1);
   // 上游给的是 1 CNY = 0.1498 USD，取倒数后是 1 USD = 6.67 CNY。
   assert.ok(payload.rates["CNY"]! > 6 && payload.rates["CNY"]! < 7);
+});
+
+test("汇率收敛到 8 位小数，不下发浮点尾巴", () => {
+  // 取倒数之后必然带尾巴：1/0.1498035959 = 6.675016068…
+  const noisy = { ...snapshot, fx: { USD: 1, CNY: 1 / 0.1498035959, AED: 1 / 0.272300000001 } };
+  const payload = buildFxPayload(noisy, new Date("2026-11-04T12:00:00Z"));
+
+  for (const [code, rate] of Object.entries(payload.rates)) {
+    assert.equal(roundTo(rate, 8), rate, `${code} 的汇率应已收敛到 8 位小数：${rate}`);
+  }
+  assert.ok(String(payload.rates["CNY"]).length <= 12, `小数位过多：${payload.rates["CNY"]}`);
 });
