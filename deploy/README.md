@@ -53,6 +53,42 @@ sudo certbot --nginx -d api.example.com
 node scripts/smoke.ts https://api.example.com
 ```
 
+## 启动与停止（Linux 生产）
+
+```bash
+sudo systemctl start|stop|restart|status metalpricekit-server
+sudo journalctl -u metalpricekit-server -f          # 跟日志
+sudo journalctl -u metalpricekit-server -p err -n 100 # 只看报错
+```
+
+环境变量在 `/etc/metalpricekit-server.env`（systemd 的 `EnvironmentFile` 指向它）。
+改完环境变量要 `sudo systemctl restart` 才生效。
+
+## 启动与停止（Windows 本地开发）
+
+开发机用仓库里的 `scripts/svc.ps1`，配置自动从 `.env.local` 读：
+
+```powershell
+cd F:\workspace\MetalSever\MetalPriceKit-Server
+
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 start
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 status
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 logs -Tail 50
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 restart
+powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 stop
+```
+
+启动后：
+
+| 地址 | 是什么 |
+|---|---|
+| `http://127.0.0.1:8787` | 行情接口 |
+| `http://127.0.0.1:8787/admin` | 运营后台（口令 = `.env.local` 的 `MPK_ADMIN_TOKEN`） |
+| `http://127.0.0.1:8787/health` | 探活 |
+
+> `.env.local` 默认是**假数据模式**（`MPK_MOCK=true`），不请求上游、不消耗额度。
+> 要打真实上游就改成 `false` 再 restart。
+
 ## 上线顺序建议
 
 先只对外开 `/health`，观察一天日志确认额度刹车生效（采集间隔被拉长是正常的），

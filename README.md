@@ -31,6 +31,8 @@ node scripts/smoke.ts http://127.0.0.1:8787
 > Node 26 可以**直接运行 `.ts` 文件**，不需要构建步骤，也不需要 tsx/ts-node。
 > 这是当初选 Node 的原因之一：少三样东西。
 
+完整的启停命令见下面「本地启停（Windows）」。
+
 ## 假数据模式（客户端联调）
 
 ```bash
@@ -51,6 +53,8 @@ MPK_POLL_INTERVAL_MS=15000   # 15 秒一轮，客户端能看到价格在动
 `scripts/svc.ps1` 管四个动作：启动、停止、重启、看状态。进程是独立后台进程，关掉终端也不影响。
 
 ```powershell
+cd F:\workspace\MetalSever\MetalPriceKit-Server
+
 # 首次：准备环境变量（复制模板并填 key）
 copy .env.local.example .env.local
 
@@ -62,6 +66,44 @@ powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 status
 powershell -ExecutionPolicy Bypass -File scripts/svc.ps1 logs -Tail 50
 ```
 
+启动后：
+
+| 地址 | 是什么 |
+|---|---|
+| `http://127.0.0.1:8787` | 行情接口（路径混淆后的那些） |
+| `http://127.0.0.1:8787/admin` | 运营后台（口令见 `.env.local` 的 `MPK_ADMIN_TOKEN`） |
+| `http://127.0.0.1:8787/health` | 探活 |
+
+**配置全部从 `.env.local` 读**，脚本自己加载，不用每次手动设环境变量。
+Node 也自动找 `F:\tools\node\node.exe`，不在 PATH 里也能跑。
+
+### 不想用脚本时
+
+```powershell
+cd F:\workspace\MetalSever\MetalPriceKit-Server
+$env:PATH = 'F:\tools\node;' + $env:PATH
+
+# 关键：先加载 .env.local，否则缺 MPK_SERVER_KEYS 会启动失败
+Get-Content .env.local -Encoding UTF8 | ForEach-Object {
+  if ($_ -match '^\s*([^#][^=]*)=(.*)$') {
+    Set-Item -Path "env:$($matches[1].Trim())" -Value $matches[2].Trim()
+  }
+}
+
+node src/index.ts
+```
+
+这条是**前台运行**（Ctrl+C 停），适合调试看堆栈。
+
+### 两个容易踩的坑
+
+1. **本地重启默认不重新拉上游**（`MPK_FETCH_ON_BOOT=false`）——
+   启动时先从本地快照恢复，立即就能对外服务。
+   额度一个月只有 100 次，每次启动都烧一次太浪费。
+   想强制刷新一次：把 `.env.local` 里那行改成 `true` 再 restart。
+2. **`.env.local` 默认是假数据模式**（`MPK_MOCK=true`，15 秒一轮）。
+   要打真实上游就改成 `false` 再 restart —— 客户端代码一行不用改。
+
 Linux 生产环境用 systemd，见 [`deploy/README.md`](deploy/README.md)：
 
 ```bash
@@ -69,11 +111,7 @@ sudo systemctl start|stop|restart|status metalpricekit-server
 sudo journalctl -u metalpricekit-server -f
 ```
 
-> **本地重启默认不重新拉上游**（`MPK_FETCH_ON_BOOT=false`）——
-> 启动时先从本地快照恢复，立即就能对外服务。
-> 额度一个月只有 100 次，每次启动都烧一次太浪费。
-> 想强制刷新一次：把 `.env.local` 里那行改成 `true` 再 restart，或跑一次
-> `node scripts/svc.ps1 restart`。
+环境变量在 `/etc/metalpricekit-server.env`（模板 `deploy/env.example`）。
 
 ---
 
